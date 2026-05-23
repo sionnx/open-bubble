@@ -1,11 +1,11 @@
 package io.bubble.core.scan
 
 import android.Manifest
-import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import io.bubble.core.bluetooth.bluetoothAdapter
 
 /**
  * 对齐 {@code x9.d}：蓝牙开关与运行时权限（无 OEM SDK）。
@@ -34,8 +34,8 @@ object BluetoothScanPermissions {
         return requiredPermissions().filter { !hasPermission(context, it) }.toTypedArray()
     }
 
-    fun isBluetoothEnabled(): Boolean {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+    fun isBluetoothEnabled(context: Context): Boolean {
+        val adapter = bluetoothAdapter(context) ?: return false
         return adapter.isEnabled
     }
 

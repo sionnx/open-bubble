@@ -1,9 +1,8 @@
 package io.bubble.core.scan
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
 import android.content.Context
+import io.bubble.core.bluetooth.bluetoothAdapter
 import java.util.Locale
 
 /**
@@ -22,9 +21,4 @@ object BondedDeviceRegistry {
             ?: emptyList()
     }
 
-    private fun bluetoothAdapter(context: Context): BluetoothAdapter? {
-        val manager = context.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE)
-            as? BluetoothManager
-        return manager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-    }
 }

@@ -117,7 +117,7 @@ class DebugActivity : ComponentActivity() {
     }
 
     private fun startDeviceScan() {
-        if (!BluetoothScanPermissions.isBluetoothEnabled()) {
+        if (!BluetoothScanPermissions.isBluetoothEnabled(this)) {
             toast("请先开启蓝牙")
             return
         }

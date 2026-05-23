@@ -1,11 +1,11 @@
 package io.bubble.core.connect
 
-import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.util.Log
 import io.bubble.core.PairSecretGenerator
 import io.bubble.core.bluetooth.BondHelper
 import io.bubble.core.bluetooth.RfcommTransport
+import io.bubble.core.bluetooth.bluetoothAdapter
 import io.bubble.core.device.DeviceBatteryClient
 import io.bubble.core.protocol.ConsultClient
 import io.bubble.core.protocol.LinkUuids
@@ -127,13 +127,13 @@ object BubbleConnectManager {
     private suspend fun runConnect(context: Context, params: ConnectParams) {
         val mac = params.mac.uppercase()
         activeMac.set(mac)
-        if (!isBluetoothReady()) {
+        if (!isBluetoothReady(context)) {
             notifyFailed(mac, 103, "bt no open")
             return
         }
         updateState(mac, ConnectState.CONNECTING, params.reason)
         try {
-            val device = BondHelper.remoteDevice(mac)
+            val device = BondHelper.remoteDevice(context, mac)
             BondHelper.ensureBonded(context, device)
             val secret = params.deviceSecret?.toByteArray(Charsets.UTF_8)
                 ?: PairSecretGenerator.generate().toByteArray(Charsets.UTF_8)
@@ -184,8 +184,8 @@ object BubbleConnectManager {
         }
     }
 
-    private fun isBluetoothReady(): Boolean {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+    private fun isBluetoothReady(context: Context): Boolean {
+        val adapter = bluetoothAdapter(context) ?: return false
         return adapter.isEnabled
     }
 

@@ -92,8 +92,8 @@ object BondHelper {
         }
     }
 
-    fun remoteDevice(mac: String): BluetoothDevice {
-        val adapter = BluetoothAdapter.getDefaultAdapter()
+    fun remoteDevice(context: Context, mac: String): BluetoothDevice {
+        val adapter = bluetoothAdapter(context)
             ?: throw IllegalStateException("Bluetooth adapter unavailable")
         if (!BluetoothAdapter.checkBluetoothAddress(mac)) {
             throw IllegalArgumentException("invalid mac: $mac")
