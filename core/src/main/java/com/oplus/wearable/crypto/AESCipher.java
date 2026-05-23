@@ -1,9 +1,14 @@
 package com.oplus.wearable.crypto;
 
+import logcat.AndroidLogcatLogger;
+import logcat.LogPriority;
+
 /**
  * JNI 封装，包名/类名与 {@code libencrypt.so} 导出符号一致，保证 Consult 握手与固件兼容。
  */
 public final class AESCipher {
+    private static final String TAG = "AESCipher";
+    private static final AndroidLogcatLogger LOGGER = new AndroidLogcatLogger();
 
     static {
         System.loadLibrary("encrypt");
@@ -27,6 +32,7 @@ public final class AESCipher {
             if (generatorKey(localRandom, remoteRandom, key) == 0) {
                 return key;
             }
+            LOGGER.log(LogPriority.ERROR, TAG, "deriveIdentityKey failed");
             return null;
         }
     }
@@ -43,6 +49,7 @@ public final class AESCipher {
                 return out;
             }
         }
+        LOGGER.log(LogPriority.ERROR, TAG, "encryptAes128 failed");
         return null;
     }
 
@@ -55,6 +62,7 @@ public final class AESCipher {
         synchronized (lock) {
             int decrypted = decrypt(cipher, key, buf, length);
             if (decrypted <= 0 || decrypted > length) {
+                LOGGER.log(LogPriority.ERROR, TAG, "decryptAes128 failed: decrypted=" + decrypted + ", length=" + length);
                 return null;
             }
             byte[] result = new byte[decrypted];
@@ -84,6 +92,7 @@ public final class AESCipher {
         System.arraycopy(data, 0, payload, 0, data.length);
         synchronized (lock) {
             if (encrypt256(payload, key, framed, iv, payload.length) <= 0) {
+                LOGGER.log(LogPriority.ERROR, TAG, "encryptAes256 failed");
                 return null;
             }
             System.arraycopy(payload, 0, framed, 1, payload.length);
@@ -103,6 +112,7 @@ public final class AESCipher {
         synchronized (lock) {
             int decrypted = decrypt256(body, key, body, iv, length) - strip;
             if (decrypted <= 0 || decrypted > length) {
+                LOGGER.log(LogPriority.ERROR, TAG, "decryptAes256 failed: decrypted=" + decrypted + ", length=" + length + ", strip=" + strip);
                 return null;
             }
             byte[] result = new byte[decrypted];

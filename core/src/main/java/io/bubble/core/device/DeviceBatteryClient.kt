@@ -8,6 +8,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 
 /**
  * 设备电量对外 API，对齐官方 `hb.a.a`（sid=1 cid=8）+ `mb.c` 应答处理。
@@ -68,6 +71,7 @@ object DeviceBatteryClient {
                     body,
                 )
                 send.onFailure { error ->
+                    logcat(LogPriority.ERROR) { "send battery request failed mac=$targetMac\n${error.asLog()}" }
                     pending.set(null)
                     cont.resumeWithException(
                         BatteryException(BatteryError.IO_ERROR, error.message ?: "send failed", error),
@@ -76,6 +80,7 @@ object DeviceBatteryClient {
             }
         }
         if (result == null) {
+            logcat(LogPriority.ERROR) { "battery response timeout mac=$targetMac timeoutMs=$timeoutMs" }
             pending.set(null)
             throw BatteryException(BatteryError.TIMEOUT, "battery response timeout (${timeoutMs}ms)")
         }
@@ -112,6 +117,7 @@ object DeviceBatteryClient {
         val body = BatteryMessageCodec.responseBody(frame) ?: return
         val info = BatteryMessageCodec.decodeResponse(body)
         if (info == null) {
+            logcat(LogPriority.ERROR) { "invalid battery response protobuf" }
             completePendingWithError(BatteryError.PARSE_ERROR, "invalid BatteryInfo protobuf")
             return
         }

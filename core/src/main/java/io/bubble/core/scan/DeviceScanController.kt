@@ -11,9 +11,13 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
+import logcat.AndroidLogcatLogger
+import logcat.LogcatLogger
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 
 /**
  * 复刻 {@code com.oplus.ebadge.discovery.d}（DeviceScanController）：
@@ -33,6 +37,15 @@ class DeviceScanController(
     },
 ) {
     private val appContext = context.applicationContext
+    init {
+        if (!LogcatLogger.isInstalled) {
+            LogcatLogger.install()
+        }
+        if (LogcatLogger.loggers.none { it is AndroidLogcatLogger }) {
+            LogcatLogger.loggers += AndroidLogcatLogger(LogPriority.VERBOSE)
+        }
+    }
+
     private val handler = Handler(Looper.getMainLooper())
     private val nearbyDevices = CopyOnWriteArrayList<ScannedDevice>()
     private val scanSettings: ScanSettings = ScanSettings.Builder()
@@ -53,6 +66,7 @@ class DeviceScanController(
 
         override fun onScanFailed(errorCode: Int) {
             handler.post {
+                logcat(LogPriority.ERROR) { "scan failed errorCode=$errorCode" }
                 if (isActive()) {
                     listener.onScanFailed(errorCode)
                 }
@@ -75,7 +89,7 @@ class DeviceScanController(
         if (isActive()) {
             listener.onBoundDevicesLoaded(devices)
         }
-        Log.d(TAG, "loadBoundDevices -> count=${devices.size}")
+        logcat(LogPriority.DEBUG) { "loadBoundDevices -> count=${devices.size}" }
     }
 
     /**
@@ -93,6 +107,7 @@ class DeviceScanController(
     /** 在宿主已确认权限时直接开始扫描。 */
     fun startScan() {
         if (!BluetoothScanPermissions.hasScanPermissions(appContext)) {
+            logcat(LogPriority.ERROR) { "startScan failed: missing scan permission" }
             listener.onScanFailed(EbadgeScanConstants.SCAN_FAILED_SCANNER_UNAVAILABLE)
             return
         }
@@ -108,12 +123,12 @@ class DeviceScanController(
         val scanner = bluetoothAdapter?.bluetoothLeScanner
         if (scanner != null) {
             runCatching { scanner.stopScan(scanCallback) }
-                .onFailure { Log.w(TAG, "stopScan failed", it) }
+                .onFailure { logcat(LogPriority.ERROR) { "stopScan failed\n${it.asLog()}" } }
         }
         if (isActive()) {
             listener.onScanStopped()
         }
-        Log.d(TAG, "stopScan")
+        logcat(LogPriority.DEBUG) { "stopScan" }
     }
 
     fun release() {
@@ -131,6 +146,7 @@ class DeviceScanController(
         }
         val scanner: BluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
             ?: run {
+                logcat(LogPriority.ERROR) { "startScan failed: scanner unavailable" }
                 listener.onScanFailed(EbadgeScanConstants.SCAN_FAILED_SCANNER_UNAVAILABLE)
                 return
             }
@@ -143,7 +159,7 @@ class DeviceScanController(
             scanSettings,
             scanCallback,
         )
-        Log.d(TAG, "startScan")
+        logcat(LogPriority.DEBUG) { "startScan" }
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed(stopScanRunnable, EbadgeScanConstants.SCAN_PERIOD_MS)
     }
@@ -162,13 +178,11 @@ class DeviceScanController(
             displayName = defaultDeviceName(appContext, index, index),
         )
         nearbyDevices.add(device)
-        Log.d(TAG, "onScanResult -> mac=$mac nearby=${nearbyDevices.size}")
+        logcat(LogPriority.DEBUG) { "onScanResult -> mac=$mac nearby=${nearbyDevices.size}" }
         listener.onNearbyDevicesChanged(nearbyDevices.toList())
     }
 
     companion object {
-        private const val TAG = "DeviceScanController"
-
         fun buildScanFilter(): ScanFilter {
             return ScanFilter.Builder()
                 .setManufacturerData(

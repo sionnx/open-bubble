@@ -1,5 +1,8 @@
 package io.bubble.core.crypto
 
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPrivateKey
@@ -29,7 +32,8 @@ object RsaHelper {
                 .generatePrivate(java.security.spec.PKCS8EncodedKeySpec(privateKeyEncoded))
             cipherInst.init(Cipher.DECRYPT_MODE, privateKey)
             cipherInst.doFinal(cipher)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR) { "decrypt failed\n${e.asLog()}" }
             null
         }
     }
@@ -39,7 +43,8 @@ object RsaHelper {
             val cipherInst = Cipher.getInstance("RSA/NONE/PKCS1Padding")
             cipherInst.init(Cipher.DECRYPT_MODE, privateKey)
             cipherInst.doFinal(cipher)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR) { "decryptWithPrivate failed\n${e.asLog()}" }
             null
         }
     }

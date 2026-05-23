@@ -1,7 +1,6 @@
 package io.bubble.core.connect
 
 import android.content.Context
-import android.util.Log
 import io.bubble.core.PairSecretGenerator
 import io.bubble.core.bluetooth.BondHelper
 import io.bubble.core.bluetooth.RfcommTransport
@@ -18,6 +17,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import logcat.AndroidLogcatLogger
+import logcat.LogcatLogger
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 
 /**
  * 复刻 OPPO Bubble Debug「连接测试」链路：
@@ -28,8 +32,6 @@ import kotlinx.coroutines.sync.withLock
  * 仅使用 Android 蓝牙 API + 协议层（无 HeyTap/OAF/LinkService Java SDK）。
  */
 object BubbleConnectManager {
-    private const val TAG = "BubbleConnectManager"
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val listeners = CopyOnWriteArrayList<ConnectListener>()
     private val packetListeners = CopyOnWriteArrayList<(ByteArray) -> Unit>()
@@ -45,6 +47,12 @@ object BubbleConnectManager {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        if (!LogcatLogger.isInstalled) {
+            LogcatLogger.install()
+        }
+        if (LogcatLogger.loggers.none { it is AndroidLogcatLogger }) {
+            LogcatLogger.loggers += AndroidLogcatLogger(LogPriority.VERBOSE)
+        }
         DeviceBatteryClient.registerWithConnectManager()
     }
 
@@ -70,6 +78,7 @@ object BubbleConnectManager {
             rfcomm.sendConsultCommand(sid, cid, body)
             Result.success(Unit)
         } catch (e: Exception) {
+            logcat(LogPriority.ERROR) { "send business message failed sid=$sid cid=$cid\n${e.asLog()}" }
             Result.failure(e)
         }
     }
@@ -176,7 +185,7 @@ object BubbleConnectManager {
             consultClient = consult
             consult.start()
         } catch (e: Exception) {
-            Log.e(TAG, "connect failed", e)
+            logcat(LogPriority.ERROR) { "connect failed\n${e.asLog()}" }
             notifyFailed(mac, 103, e.message ?: "connect error")
             transport?.close()
             transport = null
@@ -195,6 +204,7 @@ object BubbleConnectManager {
     }
 
     private fun notifyFailed(mac: String, code: Int, detail: String) {
+        logcat(LogPriority.ERROR) { "connection failed mac=$mac code=$code detail=$detail" }
         activeState.set(ConnectState.FAILED)
         listeners.forEach { it.onFailed(mac, code, detail) }
         listeners.forEach { it.onStateChanged(mac, ConnectState.FAILED, detail) }
@@ -205,7 +215,7 @@ object BubbleConnectManager {
             try {
                 listener(frame)
             } catch (e: Exception) {
-                Log.w(TAG, "packet listener error", e)
+                logcat(LogPriority.ERROR) { "packet listener error\n${e.asLog()}" }
             }
         }
     }

@@ -11,6 +11,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -64,6 +67,9 @@ object BondHelper {
                             SecurityException("Missing BLUETOOTH_CONNECT permission"),
                         )
                         runCatching { receiverContext.unregisterReceiver(this) }
+                            .onFailure {
+                                logcat(LogPriority.ERROR) { "unregister bond receiver failed\n${it.asLog()}" }
+                            }
                         return
                     }
                     when (dev.bondState) {
@@ -88,6 +94,11 @@ object BondHelper {
             }
             cont.invokeOnCancellation {
                 runCatching { context.unregisterReceiver(receiver) }
+                    .onFailure {
+                        logcat(LogPriority.ERROR) {
+                            "unregister bond receiver on cancellation failed\n${it.asLog()}"
+                        }
+                    }
             }
         }
     }

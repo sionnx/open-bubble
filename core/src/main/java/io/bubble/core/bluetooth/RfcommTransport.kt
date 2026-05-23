@@ -2,7 +2,6 @@ package io.bubble.core.bluetooth
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
-import android.util.Log
 import io.bubble.core.protocol.TransportLayer
 import java.io.IOException
 import java.util.UUID
@@ -12,6 +11,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 
 /**
  * 经典蓝牙 RFCOMM，对应 {@code nk.a} + {@code kk.b}。
@@ -21,7 +23,6 @@ class RfcommTransport(
     private val onConsultPacket: (ByteArray) -> Unit,
     private val onDisconnected: (Throwable?) -> Unit,
 ) {
-    private val tag = "RfcommTransport"
     private var socket: BluetoothSocket? = null
     private var readJob: Job? = null
     private val running = AtomicBoolean(false)
@@ -76,10 +77,10 @@ class RfcommTransport(
             val s = device.createRfcommSocketToServiceRecord(uuid)
             s.connect()
             socket = s
-            Log.d(tag, "connected via service record $uuid")
+            logcat(LogPriority.DEBUG) { "connected via service record $uuid" }
             return true
         } catch (first: IOException) {
-            Log.w(tag, "service record failed: ${first.message}")
+            logcat(LogPriority.ERROR) { "service record failed\n${first.asLog()}" }
         }
         for (channel in 1..4) {
             try {
@@ -90,10 +91,10 @@ class RfcommTransport(
                 val s = method.invoke(device, channel) as BluetoothSocket
                 s.connect()
                 socket = s
-                Log.d(tag, "connected via fallback channel $channel")
+                logcat(LogPriority.DEBUG) { "connected via fallback channel $channel" }
                 return true
-            } catch (_: Exception) {
-                // try next channel
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR) { "fallback channel $channel failed\n${e.asLog()}" }
             }
         }
         return false
@@ -115,7 +116,7 @@ class RfcommTransport(
             }
         } catch (e: Exception) {
             if (running.get()) {
-                Log.e(tag, "read loop error", e)
+                logcat(LogPriority.ERROR) { "read loop error\n${e.asLog()}" }
                 onDisconnected(e)
             }
         } finally {
@@ -127,7 +128,8 @@ class RfcommTransport(
     private fun closeQuietly() {
         try {
             socket?.close()
-        } catch (_: IOException) {
+        } catch (e: IOException) {
+            logcat(LogPriority.ERROR) { "close socket failed\n${e.asLog()}" }
         }
         socket = null
     }

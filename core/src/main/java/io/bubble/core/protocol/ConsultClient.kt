@@ -1,6 +1,5 @@
 package io.bubble.core.protocol
 
-import android.util.Log
 import com.google.protobuf.ByteString
 import com.google.protobuf.InvalidProtocolBufferException
 import io.bubble.core.crypto.BitInvert
@@ -12,6 +11,9 @@ import java.security.interfaces.RSAPrivateKey
 import java.security.interfaces.RSAPublicKey
 import java.util.Arrays
 import kotlin.random.Random
+import logcat.LogPriority
+import logcat.asLog
+import logcat.logcat
 
 /**
  * 对应 LinkService {@code pk.a ClientConsultHelper}（Consult 报文使用原版 {@link ConsultProto}）。
@@ -34,7 +36,6 @@ class ConsultClient(
     )
 
     companion object {
-        private const val TAG = "ConsultClient"
         private const val RSA_BITS = 2048
         private const val CONSULT_SID = 1
     }
@@ -68,7 +69,7 @@ class ConsultClient(
             .setProtocolVersion(5)
             .setSupportProtocol(3)
             .build()
-        Log.d(TAG, "startConsult: local protocol version 5")
+        logcat(LogPriority.DEBUG) { "startConsult: local protocol version 5" }
         sendCommand(CONSULT_SID, 1, transportConsult.toByteArray())
     }
 
@@ -89,7 +90,7 @@ class ConsultClient(
             21 -> processShakeHand(body)
             // 原版 pk.a#d：仅 cid=37 走 processAESConsultRequest；36 为手机 outbound RSA
             37 -> processAesConsult(body)
-            else -> Log.d(TAG, "receiveData: ignore cid=$cid")
+            else -> logcat(LogPriority.DEBUG) { "receiveData: ignore cid=$cid" }
         }
     }
 
@@ -100,9 +101,9 @@ class ConsultClient(
     }
 
     private fun processTransportConsult(frame: ByteArray) {
-        Log.d(TAG, "processTransportConsult")
+        logcat(LogPriority.DEBUG) { "processTransportConsult" }
         if (transportProcessed) {
-            Log.d(TAG, "processTransportConsult: already process")
+            logcat(LogPriority.DEBUG) { "processTransportConsult: already process" }
             return
         }
         transportProcessed = true
@@ -116,18 +117,17 @@ class ConsultClient(
             transferMtu = from.maxTransimissionUnit
             transferInterval = from.interval
             supportEncrypt = from.supportProtocol and 0x3 > 0
-            Log.d(
-                TAG,
+            logcat(LogPriority.DEBUG) {
                 "processTransportConsult: protocolVersion=$protocolVersion,frame=$transferMaxFrame," +
-                    "mtu=$transferMtu,interval=$transferInterval,supportEncrypt=$supportEncrypt",
-            )
+                    "mtu=$transferMtu,interval=$transferInterval,supportEncrypt=$supportEncrypt"
+            }
             when {
                 protocolVersion >= 3 -> afterTransportConsultV3()
                 protocolVersion == 2 -> startKeyConsultWithShake()
                 protocolVersion == 1 -> startKeyConsultV1()
             }
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "processTransportConsult", e)
+            logcat(LogPriority.ERROR) { "processTransportConsult\n${e.asLog()}" }
             fail(4)
         }
     }
@@ -144,34 +144,36 @@ class ConsultClient(
     }
 
     private fun processIdentityConsult(frame: ByteArray) {
-        Log.d(TAG, "processIdentityConsult")
+        logcat(LogPriority.DEBUG) { "processIdentityConsult" }
         try {
             remoteTimeRandom = ConsultProto.IdentityConsult.parseFrom(
                 Arrays.copyOfRange(frame, 2, frame.size),
             ).randomNumber
-            Log.d(TAG, "processIdentityConsult: $remoteTimeRandom")
+            logcat(LogPriority.DEBUG) { "processIdentityConsult: $remoteTimeRandom" }
             identityKey = CryptoHelper.deriveIdentityKey(localTimeRandom, remoteTimeRandom)
             if (identityKey == null) {
-                Log.d(TAG, "processIdentityConsult: key empty")
+                logcat(LogPriority.DEBUG) { "processIdentityConsult: key empty" }
                 fail(9)
             } else {
                 sendIdentityCheckRequest()
             }
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "processIdentityConsult", e)
+            logcat(LogPriority.ERROR) { "processIdentityConsult\n${e.asLog()}" }
             fail(4)
         }
     }
 
     private fun processIdentityCheck(frame: ByteArray) {
         try {
-            Log.d(TAG, "processIdentityCheck")
+            logcat(LogPriority.DEBUG) { "processIdentityCheck" }
             val from = ConsultProto.IdentityCheck.parseFrom(
                 Arrays.copyOfRange(frame, 2, frame.size),
             )
             val source = from.getData()?.toByteArray()
             val encrypt = from.getEncryptData()?.toByteArray()
-            Log.d(TAG, "processIdentityCheck: source=${source?.contentToString()}, encrypt=${encrypt?.contentToString()}")
+            logcat(LogPriority.DEBUG) {
+                "processIdentityCheck: source=${source?.contentToString()}, encrypt=${encrypt?.contentToString()}"
+            }
             val key = identityKey
             if (key == null) {
                 fail(9)
@@ -184,7 +186,7 @@ class ConsultClient(
                 Arrays.equals(localRandomData, BitInvert.invert(decrypted))
             }
             if (!ok) {
-                Log.d(TAG, "IdentityCheck: failed")
+                logcat(LogPriority.DEBUG) { "IdentityCheck: failed" }
                 fail(11)
                 return
             }
@@ -194,7 +196,7 @@ class ConsultClient(
                 else -> finishSuccess()
             }
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "IdentityCheck", e)
+            logcat(LogPriority.ERROR) { "IdentityCheck\n${e.asLog()}" }
             fail(4)
         }
     }
@@ -204,7 +206,7 @@ class ConsultClient(
             val state = ConsultProto.KeyConsult.parseFrom(
                 Arrays.copyOfRange(frame, 2, frame.size),
             ).state
-            Log.d(TAG, "processKeyConsult: state=$state")
+            logcat(LogPriority.DEBUG) { "processKeyConsult: state=$state" }
             when (state) {
                 1 -> {
                     if (needBond) {
@@ -213,26 +215,28 @@ class ConsultClient(
                     finishSuccess()
                 }
                 5 -> {
-                    Log.d(TAG, "processKeyConsult: ERROR_KEY_NOT_EXIST")
+                    logcat(LogPriority.DEBUG) { "processKeyConsult: ERROR_KEY_NOT_EXIST" }
                     sendKeyConsultRequest(needSendKey = true)
                 }
                 else -> fail(state)
             }
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "processKeyConsult", e)
+            logcat(LogPriority.ERROR) { "processKeyConsult\n${e.asLog()}" }
             fail(4)
         }
     }
 
     private fun processShakeHand(frame: ByteArray) {
         try {
-            Log.d(TAG, "processShakeHand: mNeedBond=$needBond")
+            logcat(LogPriority.DEBUG) { "processShakeHand: mNeedBond=$needBond" }
             val from = ConsultProto.ShakeHand.parseFrom(
                 Arrays.copyOfRange(frame, 2, frame.size),
             )
             val source = intListToBytes(from.dataList)
             val encrypt = intListToBytes(from.encryptDataList)
-            Log.d(TAG, "processShakeHand: source=${Arrays.toString(source)}, encrypt=${Arrays.toString(encrypt)}")
+            logcat(LogPriority.DEBUG) {
+                "processShakeHand: source=${Arrays.toString(source)}, encrypt=${Arrays.toString(encrypt)}"
+            }
             val key = consultKey ?: SecurityStore.getKey(mac)
             val matched = if (encrypt == null || shakeHandRandom == null || key == null) {
                 false
@@ -241,7 +245,7 @@ class ConsultClient(
                 Arrays.equals(shakeHandRandom, BitInvert.invert(decrypted))
             }
             if (!matched) {
-                Log.d(TAG, "processShakeHand: key not match")
+                logcat(LogPriority.DEBUG) { "processShakeHand: key not match" }
                 if (isConsultKeyModule) {
                     sendKeyConsultRequest(needSendKey = true)
                 } else {
@@ -258,13 +262,13 @@ class ConsultClient(
                 finishSuccess()
             }
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "processShakeHand", e)
+            logcat(LogPriority.ERROR) { "processShakeHand\n${e.asLog()}" }
             fail(4)
         }
     }
 
     private fun processAesConsult(frame: ByteArray) {
-        Log.d(TAG, "processAESConsult")
+        logcat(LogPriority.DEBUG) { "processAESConsult" }
         try {
             val from = ConsultProto.AESConsult.parseFrom(
                 Arrays.copyOfRange(frame, 2, frame.size),
@@ -301,13 +305,13 @@ class ConsultClient(
             }
             sendAesConsultResponse()
         } catch (e: InvalidProtocolBufferException) {
-            Log.e(TAG, "processAESConsult", e)
+            logcat(LogPriority.ERROR) { "processAESConsult\n${e.asLog()}" }
             fail(4)
         }
     }
 
     private fun sendIdentityConsultRequest() {
-        Log.d(TAG, "sendIdentityConsultRequest")
+        logcat(LogPriority.DEBUG) { "sendIdentityConsultRequest" }
         localTimeRandom = System.currentTimeMillis()
         val body = ConsultProto.IdentityConsult.newBuilder()
             .setRandomNumber(localTimeRandom)
@@ -317,7 +321,7 @@ class ConsultClient(
     }
 
     private fun sendIdentityCheckRequest() {
-        Log.d(TAG, "sendIdentityCheckRequest")
+        logcat(LogPriority.DEBUG) { "sendIdentityCheckRequest" }
         val data = randomBytes()
         localRandomData = data
         val key = identityKey ?: run { fail(9); return }
@@ -331,7 +335,7 @@ class ConsultClient(
     }
 
     private fun sendKeyConsultRequest(needSendKey: Boolean) {
-        Log.d(TAG, "sendKeyConsultRequest: needSendKey=$needSendKey, mNeedBond=$needBond")
+        logcat(LogPriority.DEBUG) { "sendKeyConsultRequest: needSendKey=$needSendKey, mNeedBond=$needBond" }
         val builder = ConsultProto.KeyConsult.newBuilder()
         if (needSendKey) {
             val key = consultKey ?: SecurityStore.getKey(mac) ?: run { fail(5); return }
@@ -349,7 +353,7 @@ class ConsultClient(
     }
 
     private fun sendShakeHandRequest() {
-        Log.d(TAG, "sendShakeHandRequest")
+        logcat(LogPriority.DEBUG) { "sendShakeHandRequest" }
         val key = consultKey ?: SecurityStore.getKey(mac) ?: run { fail(5); return }
         consultKey = key
         shakeHandRandom = randomBytes()
@@ -361,7 +365,7 @@ class ConsultClient(
     }
 
     private fun sendRsaConsultRequest() {
-        Log.d(TAG, "sendRSAConsultRequest")
+        logcat(LogPriority.DEBUG) { "sendRSAConsultRequest" }
         ensureRsaKeyPair()
         var modulus = rsaPublic!!.modulus.toByteArray()
         val exponent = rsaPublic!!.publicExponent.toByteArray()
@@ -378,7 +382,7 @@ class ConsultClient(
     }
 
     private fun sendAesConsultResponse() {
-        Log.d(TAG, "sendAESConsultResponse")
+        logcat(LogPriority.DEBUG) { "sendAESConsultResponse" }
         val body = ConsultProto.AESConsult.newBuilder()
             .setState(1)
             .build()
@@ -387,7 +391,7 @@ class ConsultClient(
     }
 
     private fun startKeyConsultWithShake() {
-        Log.d(TAG, "startKeyConsultWithShake: connectionType=$connectionType, mNeedBond=$needBond")
+        logcat(LogPriority.DEBUG) { "startKeyConsultWithShake: connectionType=$connectionType, mNeedBond=$needBond" }
         if (!isConsultKeyModule) {
             sendShakeHandRequest()
             return
@@ -471,7 +475,7 @@ class ConsultClient(
 
     private fun fail(code: Int) {
         consulting = false
-        Log.e(TAG, "consult failed code=$code")
+        logcat(LogPriority.ERROR) { "consult failed code=$code" }
         onError(code)
     }
 }
