@@ -33,6 +33,7 @@ dependencies {
     implementation("com.google.protobuf:protobuf-javalite:4.35.0")
     implementation("com.squareup.logcat:logcat:0.4")
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

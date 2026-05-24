@@ -5,6 +5,7 @@ import io.bubble.core.PairSecretGenerator
 import io.bubble.core.bluetooth.BondHelper
 import io.bubble.core.bluetooth.RfcommTransport
 import io.bubble.core.bluetooth.bluetoothAdapter
+import io.bubble.core.crypto.SecurityStore
 import io.bubble.core.device.DeviceBatteryClient
 import io.bubble.core.protocol.ConsultClient
 import io.bubble.core.protocol.LinkUuids
@@ -47,6 +48,7 @@ object BubbleConnectManager {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        SecurityStore.init(context)
         if (!LogcatLogger.isInstalled) {
             LogcatLogger.install()
         }
